@@ -1,0 +1,11 @@
+Thu Nov  6 00:55:09 UTC 2014: Stream 5 : Starting Refresh Stream 2...
+BEGIN
+CREATE TABLE
+COPY 15000
+CREATE INDEX
+ANALYZE
+DELETE 59522
+DELETE 15000
+COMMIT
+Thu Nov  6 00:56:41 UTC 2014: Stream 5 : Refresh Stream 2 completed.
+Stream 5 : Elapsed time for Refresh Stream 2 : 92 seconds

@@ -1,0 +1,84 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	nation,
+	o_year,
+	sum(amount) as sum_profit
+from
+	(
+		select
+			n_name as nation,
+			extract(year from o_orderdate) as o_year,
+			l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount
+		from
+			part,
+			supplier,
+			lineitem,
+			partsupp,
+			orders,
+			nation
+		where
+			s_suppkey = l_suppkey
+			and ps_suppkey = l_suppkey
+			and ps_partkey = l_partkey
+			and p_partkey = l_partkey
+			and o_orderkey = l_orderkey
+			and s_nationkey = n_nationkey
+			and p_name like '%blanched%'
+	) as profit
+group by
+	nation,
+	o_year
+order by
+	nation,
+	o_year desc;
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate  (cost=3670019.32..3670024.99 rows=162 width=46) (actual time=256167.610..259464.029 rows=175 loops=1)
+   Buffers: shared hit=30110136 read=854771 dirtied=25 written=3934
+   ->  Sort  (cost=3670019.32..3670019.72 rows=162 width=46) (actual time=256154.997..257128.466 rows=3264221 loops=1)
+         Sort Key: nation.n_name, (date_part('year'::text, (orders.o_orderdate)::timestamp without time zone))
+         Sort Method: quicksort  Memory: 557336kB
+         Buffers: shared hit=30110136 read=854771 dirtied=25 written=3934
+         ->  Nested Loop  (cost=2996002.06..3670013.37 rows=162 width=46) (actual time=122248.289..236054.519 rows=3264221 loops=1)
+               Buffers: shared hit=30110128 read=854771 dirtied=25 written=3934
+               ->  Nested Loop  (cost=2996002.06..3669967.17 rows=162 width=24) (actual time=122248.221..219232.093 rows=3264221 loops=1)
+                     Buffers: shared hit=23581686 read=854771 dirtied=25 written=3934
+                     ->  Nested Loop  (cost=2996002.06..3669646.23 rows=162 width=24) (actual time=122248.173..154795.020 rows=3264221 loops=1)
+                           Buffers: shared hit=10735549 read=626289 written=671
+                           ->  Merge Join  (cost=2996002.06..3669599.05 rows=162 width=28) (actual time=122248.125..134465.724 rows=3264221 loops=1)
+                                 Merge Cond: ((partsupp.ps_partkey = lineitem.l_partkey) AND (partsupp.ps_suppkey = lineitem.l_suppkey))
+                                 Buffers: shared hit=925567 read=626289 written=671
+                                 ->  Index Scan using pk_partsupp on partsupp  (cost=0.00..603091.33 rows=8000000 width=12) (actual time=0.019..5737.246 rows=7999953 loops=1)
+                                       Buffers: shared hit=336108 read=98100 written=333
+                                 ->  Sort  (cost=2996002.05..3006170.08 rows=4067212 width=28) (actual time=122247.991..124600.045 rows=3264221 loops=1)
+                                       Sort Key: part.p_partkey, lineitem.l_suppkey
+                                       Sort Method: quicksort  Memory: 353322kB
+                                       Buffers: shared hit=589459 read=528189 written=338
+                                       ->  Hash Join  (cost=67198.64..2549511.47 rows=4067212 width=28) (actual time=1396.510..118540.609 rows=3264221 loops=1)
+                                             Hash Cond: (lineitem.l_partkey = part.p_partkey)
+                                             Buffers: shared hit=589456 read=528189 written=338
+                                             ->  Seq Scan on lineitem  (cost=0.00..1683573.65 rows=60645365 width=24) (actual time=0.031..23026.142 rows=60044872 loops=1)
+                                                   Buffers: shared hit=548931 read=528189 written=338
+                                             ->  Hash  (cost=65522.00..65522.00 rows=134131 width=4) (actual time=1396.285..1396.285 rows=108755 loops=1)
+                                                   Buckets: 16384  Batches: 1  Memory Usage: 3824kB
+                                                   Buffers: shared hit=40522
+                                                   ->  Seq Scan on part  (cost=0.00..65522.00 rows=134131 width=4) (actual time=0.032..1325.936 rows=108755 loops=1)
+                                                         Filter: ((p_name)::text ~~ '%blanched%'::text)
+                                                         Rows Removed by Filter: 1891245
+                                                         Buffers: shared hit=40522
+                           ->  Index Scan using pk_supplier on supplier  (cost=0.00..0.28 rows=1 width=8) (actual time=0.005..0.005 rows=1 loops=3264221)
+                                 Index Cond: (s_suppkey = lineitem.l_suppkey)
+                                 Buffers: shared hit=9809982
+                     ->  Index Scan using pk_orders on orders  (cost=0.00..1.97 rows=1 width=8) (actual time=0.018..0.019 rows=1 loops=3264221)
+                           Index Cond: (o_orderkey = lineitem.l_orderkey)
+                           Buffers: shared hit=12846137 read=228482 dirtied=25 written=3263
+               ->  Index Scan using pk_nation on nation  (cost=0.00..0.27 rows=1 width=30) (actual time=0.003..0.003 rows=1 loops=3264221)
+                     Index Cond: (n_nationkey = supplier.s_nationkey)
+                     Buffers: shared hit=6528442
+ Total runtime: 259548.734 ms
+(43 rows)
+
+COMMIT;
+COMMIT

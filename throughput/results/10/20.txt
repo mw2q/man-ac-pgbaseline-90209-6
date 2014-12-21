@@ -1,0 +1,83 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	s_name,
+	s_address
+from
+	supplier,
+	nation
+where
+	s_suppkey in (
+		select
+			distinct (ps_suppkey)
+		from
+			partsupp,
+			part
+		where
+			ps_partkey=p_partkey
+			and p_name like 'lime%'
+			and ps_availqty > (
+				select
+					0.5 * sum(l_quantity)
+				from
+					lineitem
+				where
+					l_partkey = ps_partkey
+					and l_suppkey = ps_suppkey
+					and l_shipdate >= '1996-01-01'
+					and l_shipdate < cast(date '1996-01-01' + interval '1 year' as date)
+			)
+	)
+	and s_nationkey = n_nationkey
+	and n_name = 'UNITED STATES'
+order by
+	s_name;
+                                                                                                  QUERY PLAN                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=12740712.16..12740715.08 rows=1170 width=51) (actual time=18341.434..18341.593 rows=1794 loops=1)
+   Sort Key: supplier.s_name
+   Sort Method: quicksort  Memory: 256kB
+   Buffers: shared hit=2687544 read=428615 dirtied=5265 written=20932
+   ->  Nested Loop  (cost=12736245.92..12740652.53 rows=1170 width=51) (actual time=18085.785..18311.733 rows=1794 loops=1)
+         Join Filter: (supplier.s_nationkey = nation.n_nationkey)
+         Rows Removed by Join Filter: 42944
+         Buffers: shared hit=2687539 read=428615 dirtied=5265 written=20932
+         ->  Seq Scan on nation  (cost=0.00..1.31 rows=1 width=4) (actual time=0.014..0.015 rows=1 loops=1)
+               Filter: (n_name = 'UNITED STATES'::bpchar)
+               Rows Removed by Filter: 24
+               Buffers: shared hit=1
+         ->  Hash Semi Join  (cost=12736245.92..12740285.46 rows=29261 width=55) (actual time=18085.747..18304.776 rows=44738 loops=1)
+               Hash Cond: (supplier.s_suppkey = partsupp.ps_suppkey)
+               Buffers: shared hit=2687538 read=428615 dirtied=5265 written=20932
+               ->  Seq Scan on supplier  (cost=0.00..3179.00 rows=100000 width=59) (actual time=0.020..49.921 rows=100000 loops=1)
+                     Buffers: shared hit=2179
+               ->  Hash  (cost=12735880.15..12735880.15 rows=29261 width=4) (actual time=18085.679..18085.679 rows=44738 loops=1)
+                     Buckets: 4096  Batches: 1  Memory Usage: 1573kB
+                     Buffers: shared hit=2685359 read=428615 dirtied=5265 written=20932
+                     ->  HashAggregate  (cost=12735294.93..12735587.54 rows=29261 width=4) (actual time=18044.274..18070.582 rows=44738 loops=1)
+                           Buffers: shared hit=2685359 read=428615 dirtied=5265 written=20932
+                           ->  Nested Loop  (cost=0.00..12735221.78 rows=29261 width=4) (actual time=1.912..17917.151 rows=59119 loops=1)
+                                 Buffers: shared hit=2685359 read=428615 dirtied=5265 written=20932
+                                 ->  Seq Scan on part  (cost=0.00..65522.00 rows=22022 width=4) (actual time=0.030..1185.456 rows=21740 loops=1)
+                                       Filter: ((p_name)::text ~~ 'lime%'::text)
+                                       Rows Removed by Filter: 1978260
+                                       Buffers: shared hit=19370 read=21152 written=899
+                                 ->  Index Scan using pk_partsupp on partsupp  (cost=0.00..575.31 rows=1 width=8) (actual time=0.606..0.766 rows=3 loops=21740)
+                                       Index Cond: (ps_partkey = part.p_partkey)
+                                       Filter: ((ps_availqty)::double precision > (SubPlan 1))
+                                       Rows Removed by Filter: 1
+                                       Buffers: shared hit=2665989 read=407463 dirtied=5265 written=20033
+                                       SubPlan 1
+                                         ->  Aggregate  (cost=140.92..140.93 rows=1 width=4) (actual time=0.180..0.180 rows=1 loops=86960)
+                                               Buffers: shared hit=2591162 read=392502 dirtied=5265 written=19453
+                                               ->  Index Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=0.00..140.92 rows=1 width=4) (actual time=0.112..0.178 rows=1 loops=86960)
+                                                     Index Cond: (l_partkey = partsupp.ps_partkey)
+                                                     Filter: ((l_shipdate >= '1996-01-01'::date) AND (l_shipdate < '1997-01-01'::date) AND (l_suppkey = partsupp.ps_suppkey))
+                                                     Rows Removed by Filter: 29
+                                                     Buffers: shared hit=2591162 read=392502 dirtied=5265 written=19453
+ Total runtime: 18343.381 ms
+(42 rows)
+
+COMMIT;
+COMMIT
